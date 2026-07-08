@@ -1,0 +1,82 @@
+name: Hourly Petition Monitor
+
+on:
+  schedule:
+    # Runs hourly from 7 AM to 7 PM MT (13:00 to 02:00 UTC) every day of the week
+    - cron: '0 13-23,0-2 * * *'
+  workflow_dispatch:
+    inputs:
+      send_test_email:
+        description: 'Force sending a test email (or trigger test failure) to verify configuration'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  check-and-alert:
+    runs-on: ubuntu-latest
+    env:
+      SMTP_CONFIGURED: ${{ secrets.MAIL_SERVER != '' && secrets.MAIL_USERNAME != '' && secrets.MAIL_PASSWORD != '' && secrets.MAIL_TO != '' }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
+      - name: Check Status
+        id: check
+        run: python check_status.py
+
+      - name: Send Email Notification
+        if: (steps.check.outputs.changed == 'true' || github.event.inputs.send_test_email == 'true') && env.SMTP_CONFIGURED == 'true'
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: ${{ secrets.MAIL_SERVER }}
+          server_port: ${{ secrets.MAIL_PORT }}
+          username: ${{ secrets.MAIL_USERNAME }}
+          password: ${{ secrets.MAIL_PASSWORD }}
+          subject: "Alberta Petition Tracker Alert: ${{ (github.event.inputs.send_test_email == 'true' && 'Test Email') || 'Financial Statement Updated' }}"
+          to: ${{ secrets.MAIL_TO }}
+          from: "Alberta Petition Tracker <${{ secrets.MAIL_USERNAME }}>"
+          html_body: |
+            <h3>Alberta Petition Status ${{ (github.event.inputs.send_test_email == 'true' && 'Test') || 'Updated!' }}</h3>
+            <p>${{ (github.event.inputs.send_test_email == 'true' && 'This is a test email to verify your SMTP configuration.') || 'This is a notification that the financial statement status for <strong>2026 A Referendum Relating to Alberta Independence</strong> has changed.' }}</p>
+            <p><strong>Old Status:</strong> ${{ steps.check.outputs.old_status || 'Due: July 3, 2026' }}</p>
+            <p><strong>New Status:</strong> ${{ steps.check.outputs.new_status || 'Due: July 3, 2026 (Test)' }}</p>
+            <p>Check the live page here: <a href="https://efpublic.elections.ab.ca/efCIPs.cfm?MID=CIP">Elections Alberta Financial Disclosure</a></p>
+          secure: ${{ secrets.MAIL_PORT == '465' }}
+
+      - name: Commit and push status.txt
+        if: steps.check.outputs.changed == 'true'
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add status.txt
+          git commit -m "Update last seen status: ${{ steps.check.outputs.new_status }}"
+          git push
+
+      - name: Fail intentionally for fallback notification
+        if: (steps.check.outputs.changed == 'true' || github.event.inputs.send_test_email == 'true') && env.SMTP_CONFIGURED != 'true'
+        run: |
+          echo "================================================================================================"
+          echo "TEST/ALERT: A change or test run was triggered!"
+          echo "Old Status: ${{ steps.check.outputs.old_status || 'Due: July 3, 2026' }}"
+          echo "New Status: ${{ steps.check.outputs.new_status || 'Due: July 3, 2026 (Test)' }}"
+          echo "------------------------------------------------------------------------------------------------"
+          echo "Since no SMTP secrets (MAIL_SERVER, MAIL_USERNAME, etc.) are configured, we are failing"
+          echo "this workflow run intentionally. You should receive a standard GitHub run failure email."
+          echo "================================================================================================"
+          exit 1

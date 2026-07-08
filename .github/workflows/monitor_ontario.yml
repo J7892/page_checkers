@@ -1,0 +1,90 @@
+name: Ontario Consumer Beware List Monitor
+
+on:
+  schedule:
+    # Runs weekdays (Mon-Fri) at 10 AM, 1 PM, and 5 PM ET (14:00, 17:00, 21:00 UTC during summer/EDT)
+    - cron: '0 14,17,21 * * 1-5'
+  workflow_dispatch:
+    inputs:
+      send_test_email:
+        description: 'Force sending a test email (or trigger test failure) to verify configuration'
+        required: false
+        type: boolean
+        default: false
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - 'status_ontario.json'
+
+permissions:
+  contents: write
+
+jobs:
+  check-and-alert:
+    runs-on: ubuntu-latest
+    env:
+      SMTP_CONFIGURED: ${{ secrets.MAIL_SERVER != '' && secrets.MAIL_USERNAME != '' && secrets.MAIL_PASSWORD != '' && secrets.MAIL_TO != '' }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
+      - name: Check Status
+        id: check
+        run: python check_ontario.py
+
+      - name: Send Email Notification
+        if: (steps.check.outputs.changed == 'true' || github.event.inputs.send_test_email == 'true') && env.SMTP_CONFIGURED == 'true'
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: ${{ secrets.MAIL_SERVER }}
+          server_port: ${{ secrets.MAIL_PORT }}
+          username: ${{ secrets.MAIL_USERNAME }}
+          password: ${{ secrets.MAIL_PASSWORD }}
+          subject: "Ontario Consumer Beware List Alert: ${{ (github.event.inputs.send_test_email == 'true' && 'Test Email') || steps.check.outputs.change_summary || 'Updates Detected' }}"
+          to: ${{ secrets.MAIL_TO }}
+          from: "Ontario Consumer Beware List Monitor <${{ secrets.MAIL_USERNAME }}>"
+          content_type: text/html
+          html_body: |
+            <h3>Ontario Consumer Beware List Update (Ticket Sales)</h3>
+            <p>The following changes were detected on Ontario's Consumer Beware List:</p>
+            <hr/>
+            <div>
+              ${{ steps.check.outputs.change_details || '<h3>Test Email</h3><p>This is a manual test email to verify your SMTP configuration. No actual changes were detected.</p>' }}
+            </div>
+            <hr/>
+            <p>Check the live list here: <a href="https://www.consumerbewarelist.mgs.gov.on.ca/en/CBL/searchresult?product=Ticket%20Sales&isSearchAll=False">Ontario Consumer Beware List (Ticket Sales)</a></p>
+          secure: ${{ secrets.MAIL_PORT == '465' }}
+
+      - name: Commit and push status_ontario.json
+        if: steps.check.outputs.changed == 'true'
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add status_ontario.json
+          git commit -m "Update Ontario Consumer Beware List state: ${{ steps.check.outputs.change_summary }}"
+          git push
+
+      - name: Fail intentionally for fallback notification
+        if: (steps.check.outputs.changed == 'true' || github.event.inputs.send_test_email == 'true') && env.SMTP_CONFIGURED != 'true'
+        run: |
+          echo "================================================================================================"
+          echo "TEST/ALERT: Changes detected on the Ontario Consumer Beware List or test run triggered!"
+          echo "Summary: ${{ steps.check.outputs.change_summary || 'Manual Test Run' }}"
+          echo "------------------------------------------------------------------------------------------------"
+          echo "Since no SMTP secrets (MAIL_SERVER, MAIL_USERNAME, etc.) are configured, we are failing"
+          echo "this workflow run intentionally. You should receive a standard GitHub run failure email."
+          echo "================================================================================================"
+          exit 1
