@@ -56,7 +56,6 @@ jobs:
           subject: "Ontario Consumer Beware List Alert: ${{ (github.event.inputs.send_test_email == 'true' && 'Test Email') || steps.check.outputs.change_summary || 'Updates Detected' }}"
           to: ${{ secrets.MAIL_TO }}
           from: "Ontario Consumer Beware List Monitor <${{ secrets.MAIL_USERNAME }}>"
-          content_type: text/html
           html_body: |
             <h3>Ontario Consumer Beware List Update (Ticket Sales)</h3>
             <p>The following changes were detected on Ontario's Consumer Beware List:</p>
