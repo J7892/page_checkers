@@ -88,8 +88,8 @@ def main():
         print(f"Fetching details for '{name}'...")
         details = fetch_company_details(detail_url)
         if details is None:
-            # Fall back to empty details if subpage fetch fails, to prevent entire script failing
-            details = {}
+            print(f"Error: Failed to fetch company details for '{name}'. Aborting run to prevent state corruption.", file=sys.stderr)
+            sys.exit(4)
             
         current_companies[name] = {
             "url": detail_url,
