@@ -1,0 +1,72 @@
+name: Daily B.C. FOI Request Monitor
+
+on:
+  schedule:
+    # Run once a day at 1:00 AM UTC (which is 6:00 PM PDT / 5:00 PM PST)
+    - cron: '0 1 * * *'
+  workflow_dispatch:
+    inputs:
+      send_test_email:
+        description: 'Send a test email even if no updates are detected'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  check-and-alert:
+    runs-on: ubuntu-latest
+    env:
+      SMTP_CONFIGURED: ${{ secrets.MAIL_SERVER != '' && secrets.MAIL_USERNAME != '' && secrets.MAIL_PASSWORD != '' && secrets.MAIL_TO != '' }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
+      - name: Check B.C. FOI Status
+        id: check
+        run: python check_bc_foi.py
+
+      - name: Send Email Notification
+        if: (steps.check.outputs.changed == 'true' || github.event.inputs.send_test_email == 'true') && env.SMTP_CONFIGURED == 'true'
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: ${{ secrets.MAIL_SERVER }}
+          server_port: ${{ secrets.MAIL_PORT }}
+          username: ${{ secrets.MAIL_USERNAME }}
+          password: ${{ secrets.MAIL_PASSWORD }}
+          subject: "B.C. FOI Digest Alert: ${{ (github.event.inputs.send_test_email == 'true' && 'Test Email') || steps.check.outputs.change_summary || 'Updates Detected' }}"
+          to: ${{ secrets.MAIL_TO }}
+          from: "B.C. FOI Request Monitor <${{ secrets.MAIL_USERNAME }}>"
+          html_body: |
+            <h3>B.C. Freedom of Information Completed Requests Daily Digest</h3>
+            <p>The following new completed FOI requests were published by the B.C. Government:</p>
+            <hr style="border: 0; border-top: 1px solid #ccc; margin: 15px 0;"/>
+            <div>
+              ${{ steps.check.outputs.change_details || '<h3>Test Email</h3><p>This is a manual test email to verify your SMTP configuration. No actual changes were detected.</p>' }}
+            </div>
+            <hr style="border: 0; border-top: 1px solid #ccc; margin: 15px 0;"/>
+            <p>Search completed FOI records here: <a href="https://www2.gov.bc.ca/gov/search?q=foi+request%2Binmeta%3Ahigh_level_subject%3DFOI+Request&id=9199E7BC9682482EB9EA0B6D6B8D386C&tab=1">B.C. Open Information Catalogue</a></p>
+          secure: ${{ secrets.MAIL_PORT == '465' }}
+
+      - name: Commit and push status_bc_foi.json
+        if: steps.check.outputs.changed == 'true'
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add status_bc_foi.json
+          git commit -m "Update B.C. FOI state: Updated details for new releases."
+          git push
