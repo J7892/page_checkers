@@ -1,9 +1,11 @@
-name: Daily B.C. FOI Request Monitor
+name: B.C. FOI Request Monitor
 
 on:
   schedule:
-    # Run once a day at 1:00 AM UTC (which is 6:00 PM PDT / 5:00 PM PST) on weekdays (Mon-Fri)
-    - cron: '0 1 * * 1-5'
+    # Runs weekdays (Mon-Fri) at 10:00 AM and 1:00 PM PDT (17:00 and 20:00 UTC)
+    - cron: '0 17,20 * * 1-5'
+    # Runs weekdays (Mon-Fri) at 6:00 PM PDT (which is 1:00 AM UTC on Tue-Sat)
+    - cron: '0 1 * * 2-6'
   workflow_dispatch:
     inputs:
       send_test_email:
