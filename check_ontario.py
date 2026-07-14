@@ -2,6 +2,7 @@ import os
 import re
 import sys
 import json
+import time
 import requests
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin
@@ -24,12 +25,22 @@ def write_github_output_multiline(name, value):
 
 def fetch_company_details(url):
     headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
-    try:
-        response = requests.get(url, headers=headers, timeout=20)
-        response.raise_for_status()
-    except Exception as e:
-        print(f"Error fetching details from {url}: {e}", file=sys.stderr)
-        return None
+    max_retries = 3
+    backoff = 2
+    response = None
+    for attempt in range(1, max_retries + 1):
+        try:
+            response = requests.get(url, headers=headers, timeout=20)
+            response.raise_for_status()
+            break
+        except Exception as e:
+            print(f"Warning: Attempt {attempt} to fetch details from {url} failed: {e}", file=sys.stderr)
+            if attempt == max_retries:
+                print(f"Error fetching details from {url}: {e}", file=sys.stderr)
+                return None
+            sleep_time = backoff ** attempt
+            print(f"Retrying in {sleep_time} seconds...", file=sys.stderr)
+            time.sleep(sleep_time)
         
     soup = BeautifulSoup(response.text, 'html.parser')
     table = soup.find('table', class_='table')
@@ -61,12 +72,22 @@ def main():
     
     # 2. Fetch main search results
     headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
-    try:
-        response = requests.get(SEARCH_URL, headers=headers, timeout=20)
-        response.raise_for_status()
-    except Exception as e:
-        print(f"Error fetching search results: {e}", file=sys.stderr)
-        sys.exit(2)
+    max_retries = 3
+    backoff = 2
+    response = None
+    for attempt in range(1, max_retries + 1):
+        try:
+            response = requests.get(SEARCH_URL, headers=headers, timeout=20)
+            response.raise_for_status()
+            break
+        except Exception as e:
+            print(f"Warning: Attempt {attempt} to fetch search results failed: {e}", file=sys.stderr)
+            if attempt == max_retries:
+                print(f"Error fetching search results: {e}", file=sys.stderr)
+                sys.exit(2)
+            sleep_time = backoff ** attempt
+            print(f"Retrying in {sleep_time} seconds...", file=sys.stderr)
+            time.sleep(sleep_time)
         
     soup = BeautifulSoup(response.text, 'html.parser')
     table = soup.find('table')

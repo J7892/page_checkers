@@ -1,6 +1,7 @@
 import os
 import sys
 import json
+import time
 import requests
 from bs4 import BeautifulSoup
 
@@ -20,12 +21,23 @@ def fetch_page_results(page_num):
         "Referer": "https://www2.gov.bc.ca/"
     }
     
-    try:
-        response = requests.get(url, headers=headers, timeout=30)
-        response.raise_for_status()
-    except Exception as e:
-        print(f"Error fetching page {page_num}: {e}", file=sys.stderr)
-        sys.exit(2)
+    max_retries = 3
+    backoff = 2
+    response = None
+    
+    for attempt in range(1, max_retries + 1):
+        try:
+            response = requests.get(url, headers=headers, timeout=30)
+            response.raise_for_status()
+            break
+        except Exception as e:
+            print(f"Warning: Attempt {attempt} to fetch page {page_num} failed with error: {e}", file=sys.stderr)
+            if attempt == max_retries:
+                print(f"Error: Failed to fetch page {page_num} after {max_retries} attempts.", file=sys.stderr)
+                sys.exit(2)
+            sleep_time = backoff ** attempt
+            print(f"Retrying in {sleep_time} seconds...", file=sys.stderr)
+            time.sleep(sleep_time)
         
     soup = BeautifulSoup(response.text, 'html.parser')
     next_data_script = soup.find('script', id='__NEXT_DATA__')

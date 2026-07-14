@@ -1,6 +1,7 @@
 import os
 import re
 import sys
+import time
 import requests
 
 URL = "https://efpublic.elections.ab.ca/efCIPs.cfm?MID=CIP"
@@ -28,12 +29,22 @@ def main():
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     }
-    try:
-        response = requests.get(URL, headers=headers, timeout=30)
-        response.raise_for_status()
-    except Exception as e:
-        print(f"Error fetching the URL: {e}", file=sys.stderr)
-        sys.exit(2)  # Use exit code 2 for network/fetch errors
+    max_retries = 3
+    backoff = 2
+    response = None
+    for attempt in range(1, max_retries + 1):
+        try:
+            response = requests.get(URL, headers=headers, timeout=30)
+            response.raise_for_status()
+            break
+        except Exception as e:
+            print(f"Warning: Attempt {attempt} to fetch URL failed with error: {e}", file=sys.stderr)
+            if attempt == max_retries:
+                print(f"Error fetching the URL: {e}", file=sys.stderr)
+                sys.exit(2)  # Use exit code 2 for network/fetch errors
+            sleep_time = backoff ** attempt
+            print(f"Retrying in {sleep_time} seconds...", file=sys.stderr)
+            time.sleep(sleep_time)
 
     html = response.text
     
