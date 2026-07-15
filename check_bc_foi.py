@@ -2,7 +2,7 @@ import os
 import sys
 import json
 import time
-import requests
+import cloudscraper
 from bs4 import BeautifulSoup
 
 URL_TEMPLATE = "https://www2.gov.bc.ca/gov/search?q=foi+request%2Binmeta%3Ahigh_level_subject%3DFOI+Request&id=9199E7BC9682482EB9EA0B6D6B8D386C&tab=1&page={page}"
@@ -27,7 +27,8 @@ def fetch_page_results(page_num):
     
     for attempt in range(1, max_retries + 1):
         try:
-            response = requests.get(url, headers=headers, timeout=30)
+            scraper = cloudscraper.create_scraper(delay=10)
+            response = scraper.get(url, headers=headers, timeout=30)
             response.raise_for_status()
             break
         except Exception as e:
