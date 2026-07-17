@@ -53,21 +53,25 @@ jobs:
           from: "Centurion Project Monitor <${{ secrets.MAIL_USERNAME }}>"
           html_body: |
             <h3>Centurion Project Website Change Detected</h3>
-            <p>The following text changes were detected on <a href="https://www.thecenturionproject.ca/">The Centurion Project website</a>:</p>
+            <p>The following changes were detected on The Centurion Project website:</p>
             <hr style="border: 0; border-top: 1px solid #ccc; margin: 15px 0;"/>
-            <div style="background-color: #fafafa; border: 1px solid #ddd; padding: 10px; border-radius: 4px; overflow-x: auto;">
+            <div>
               ${{ steps.check.outputs.change_details || '<h3>Test Email</h3><p>This is a manual test email to verify your SMTP configuration. No actual changes were detected.</p>' }}
             </div>
             <hr style="border: 0; border-top: 1px solid #ccc; margin: 15px 0;"/>
-            <p>Visit the live site here: <a href="https://www.thecenturionproject.ca/">The Centurion Project</a></p>
+            <p>Visit the live sites here:</p>
+            <ul>
+              <li><a href="https://www.thecenturionproject.ca/">Home Page</a></li>
+              <li><a href="https://www.thecenturionproject.ca/event-list">Events Page</a></li>
+            </ul>
           secure: ${{ secrets.MAIL_PORT == '465' }}
 
-      - name: Commit and push status_centurion.txt
+      - name: Commit and push status_centurion.json
         if: steps.check.outputs.changed == 'true'
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git add status_centurion.txt
+          git add status_centurion.json
           git commit -m "Update Centurion Project baseline: ${{ steps.check.outputs.change_summary }}"
           git push
 
