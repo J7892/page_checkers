@@ -20,6 +20,13 @@ This repository monitors multiple public government websites for updates, includ
 * **State File**: `status_ontario.json`
 * **Workflow**: `.github/workflows/monitor_ontario.yml` (Runs weekdays at 10 AM, 1 PM, and 5 PM ET).
 
+### 3. Foreign Influence Commissioner Monitor
+* **Goal**: Monitor updates on the **Office of the Foreign Influence Commissioner of Canada** landing page.
+* **Target URL**: [Office of the Foreign Influence Commissioner of Canada](https://www.canada.ca/en/foreign-influence-commissioner.html)
+* **Scraper**: `check_foreign_influence.py`
+* **State File**: `status_foreign_influence.json`
+* **Workflow**: `.github/workflows/monitor_foreign_influence.yml` (Runs daily at 12:00 PM UTC).
+
 ---
 
 ## Configuration
@@ -53,4 +60,8 @@ If you do **not** configure these SMTP secrets, the workflows will still commit 
 3. Run the Ontario check:
    ```bash
    python check_ontario.py
+   ```
+4. Run the Foreign Influence Commissioner check:
+   ```bash
+   python check_foreign_influence.py
    ```
